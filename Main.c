@@ -212,14 +212,14 @@ void Init(void)
 	DFR_RobotInit();
 
 	// GPIO Interrupts Enable
-	// SW3
-	GPIO_IntCmd(0,1 << 4, 0);
-	// Joystick
-	GPIO_IntCmd(2,1 << 3, 0);
-	
-	GPIO_IntCmd(2,1 << 3, 0);
 
-	// ADD OTHET INTERRUPTS ROY
+	// Port 0
+	// SW3 | Joystick DOWN P0[15] | Joystick RIGHT P0[16] | Joystick CENTER P0[17]
+	GPIO_IntCmd(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17, 0);
+
+	// Port 2
+	// Joystick UP P2[3] | Joystick LEFT P2[4]
+	GPIO_IntCmd(2,1 << 3 | 1 << 4, 0);
 
 	// Enable GPIO Interrupts
 	NVIC_EnableIRQ(EINT3_IRQn);
@@ -272,47 +272,6 @@ int main (void)
 	{
 		DFR_ClearWheelCounts();
 
-		// Poll for the joystick
-		switch(joystick_read()){
-			case JOYSTICK_CENTER:
-					// m
-				break;
-			case JOYSTICK_DOWN:
-				// Moved to interrupt
-				break;
-			case JOYSTICK_RIGHT:
-					// m
-				break;
-			case JOYSTICK_UP:
-				// Moved into interrupt
-				break;
-			case JOYSTICK_LEFT:
-					//m
-				break;
-		}
-
-		/*switch(currentMovement){
-			case BACKWARDS:
-				DFR_DecRightWheelCount();
-				DFR_DecLeftWheelCount();
-				break;
-			case FORWARDS:
-				DFR_IncRightWheelCount();
-				DFR_IncLeftWheelCount();
-				break;
-			case LEFT:
-				DFR_IncLeftWheelCount();
-				break;
-			case RIGHT:
-				DFR_IncRightWheelCount();
-				break;
-		}*/
-
-
-
-		// Poll for switch
-		//WriteOLEDString((uint8_t*)RotarySwitch_Read(), 7, 0);
-
 		// Set the seven segment to the current 'gear'
 		Gear = DFR_GetGear();
 		SevenSegment_SetCharacter('0' + Gear, FALSE);
@@ -324,60 +283,6 @@ int main (void)
 		if(Buttons_Read2() == 0){
 			WriteOLEDString((uint8_t*)"Button2 has been pressed", 2, 0);
 		}
-
-		/*TIM_ResetCounter(LPC_TIM0);
-		TIM_Cmd(LPC_TIM0, ENABLE);
-
-		// Hmmm...maybe the ADC could trigger an interrupt when it finishes a conversion
-		// instead of doing this.
-		// ADCval = ADC_ChannelGetData(LPC_ADC, 0);
-
-		// Could this button be active low?
-		if (Buttons_Read2() == 0)
-		{
-			if(DFR_GetGear() != 3)
-			{
-				DelayMS(500);
-				DFR_IncGear();
-				Gear = DFR_GetGear();
-				SevenSegment_SetCharacter('0' + Gear, FALSE);
-
-				DelayMS(500);
-				DFR_IncGear();
-				Gear = DFR_GetGear();
-				SevenSegment_SetCharacter('0' + Gear, FALSE);
-			}
-
-			while (1)
-			{
-				// Wheel destinations won't actually work. But Interrupts might
-				// be able help us here with this sort of a problem. dfrobot.c
-				// might also gives us some clues about how we could use
-				// destinations and wheel encoder counts.
-				DelayMS(500);
-				DFR_ClearWheelCounts();
-				DFR_SetRightWheelDestination(10);
-				DFR_SetLeftWheelDestination(10);
-				DFR_DriveForward(100);
-
-				while (Stop == 0)
-				{
-					// Spin here until JOY UP is pressed
-				}
-
-				DFR_ClearWheelCounts();
-				DFR_DriveStop();
-				break;
-			}
-
-			// Play a song
-			Tune_PlaySong(Tune_SampleSongs[0]);
-
-			// Break out ready to drive forward on SW4 again.
-			Stop = 0;
-		}
-
-		//WriteOLEDString((uint8_t*)converPtrToTimeNum(LPC_TIM0), 5, 0);*/
 
 	}
 }
@@ -420,19 +325,6 @@ void EINT3_IRQHandler (void)
 		WriteOLEDString((uint8_t*)"FORWARDS      ", 3, 0);
 
 		DFR_DriveForward(movementSpeed);
-
-		// I wonder how this function works.
-		/*pca9532_setLeds(0b0000000110000000, 0xffff);
-		Stop = 1;
-
-		if (Buttons_Read2() == 0)
-		{
-			// Could be useful for adding second functions to things.
-		}
-		else
-		{
-
-		}*/
 	}
 	// Joystick DOWN P0[15]
 	else if ((((LPC_GPIOINT->IO0IntStatR) >> 15)& 0x1) == ENABLE){
@@ -476,11 +368,12 @@ void EINT3_IRQHandler (void)
 	}
 
 	// Clear GPIO Interrupt Flags
-	// SW3
-    GPIO_ClearInt(0,1 << 4);
-    // Joystick UP | Encoder | Encoder
-    GPIO_ClearInt(2,1 << 3 | 1 << 11 | 1 << 12);
 
-    // Joystick DOWN
-    //GPIO_ClearInt(0,1 << 15);
+	// Port 0
+	// SW3 | Joystick DOWN | Joystick RIGHT | Joystick CENTER
+    GPIO_ClearInt(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17);
+
+    // Port 2
+    // Joystick UP | Encoder | Encoder | Joystick LEFT
+    GPIO_ClearInt(2,1 << 3 | 1 << 11 | 1 << 12 | 1 << 4 );
 }
