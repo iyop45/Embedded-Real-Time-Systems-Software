@@ -217,9 +217,13 @@ void Init(void)
 	// SW3 | Joystick DOWN P0[15] | Joystick RIGHT P0[16] | Joystick CENTER P0[17]
 	GPIO_IntCmd(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17, 0);
 
+	// Port 1
+	// Right button P1[31]
+	//GPIO_IntCmd(1,1 << 31, 0);
+
 	// Port 2
-	// Joystick UP P2[3] | Joystick LEFT P2[4]
-	GPIO_IntCmd(2,1 << 3 | 1 << 4, 0);
+	// Joystick UP P2[3] | Joystick LEFT P2[4] | Encoder(Left) | Encoder(Right)
+	GPIO_IntCmd(2,1 << 3 | 1 << 4, 0 |  1 << 11 | 1 << 12);
 
 	// Enable GPIO Interrupts
 	NVIC_EnableIRQ(EINT3_IRQn);
@@ -267,22 +271,29 @@ int main (void)
 	//enum movement {LEFT, RIGHT, FORWARDS, BACKWARDS, IDLE};
 	//enum movement currentMovement;
 
+	//uint8_t a;
+	DFR_ClearWheelCounts();
+
 	// Main program loop
 	while (1)
 	{
-		DFR_ClearWheelCounts();
 
 		// Set the seven segment to the current 'gear'
 		Gear = DFR_GetGear();
 		SevenSegment_SetCharacter('0' + Gear, FALSE);
 
-		if(Buttons_Read1() == 0){
+		/*if(Buttons_Read1() == 0){
 			WriteOLEDString((uint8_t*)"Button1 has been pressed", 1, 0);
 		}
 
 		if(Buttons_Read2() == 0){
 			WriteOLEDString((uint8_t*)"Button2 has been pressed", 2, 0);
-		}
+		}*/
+
+
+		//WriteOLEDString((uint8_t*)"hi world!", 1, 0);
+		//WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 1, 0);
+		//WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 2, 0);
 
 	}
 }
@@ -304,22 +315,51 @@ void changeGear(uint8_t gear){
 void EINT3_IRQHandler (void)
 {
 
+	uint8_t a;
+	a = LPC_GPIOINT->IO0IntStatR;
+
+	uint8_t isPlaying = 0;
+
 	// Encoder input 1 (Left)
 	if ((((LPC_GPIOINT->IO2IntStatR) >> 11)& 0x1) == ENABLE)
 	{
-
+		WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 1, 0);
+		//DFR_ClearWheelCounts();
 	}
-
 	// Encoder input 2 (Right)
 	else if ((((LPC_GPIOINT->IO2IntStatR) >> 12)& 0x1) == ENABLE)
 	{
-
+		WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 2, 0);
+		//DFR_ClearWheelCounts();
 	}
+
+	// Left Button 1 (Start / Pause) P0[4]
+	if ((((LPC_GPIOINT->IO0IntStatR) >> 4)& 0x1) == ENABLE)
+	{
+		if(Tune_IsPlaying()){
+			// Pause
+			Tune_PauseSong();
+		}else{
+			// Play
+			Tune_PlaySong(Tune_SampleSongs[0]);
+		}
+
+		WriteOLEDString((uint8_t*)"Left button", 1, 0);
+	}
+	// Right Button 2 (Stop) P1[31]
+	//else if ((((LPC_GPIOINT->IO1IntStatR) >> 31)& 0x1) == ENABLE)
+	//{
+	//	WriteOLEDString((uint8_t*)"Right button", 2, 0);
+	//}
 
 
 	// Joystick UP P2[3]
 	if ((((LPC_GPIOINT->IO2IntStatR) >> 3)& 0x1) == ENABLE)
 	{
+		//DFR_ClearWheelCounts();
+		DFR_SetRightWheelDestination(10);
+		DFR_SetLeftWheelDestination(10);
+
 		WriteOLEDString((uint8_t*)"JOYSTICK: UP     ", 0, 0);
 		currentMovement = FORWARDS;
 		WriteOLEDString((uint8_t*)"FORWARDS      ", 3, 0);
@@ -328,6 +368,10 @@ void EINT3_IRQHandler (void)
 	}
 	// Joystick DOWN P0[15]
 	else if ((((LPC_GPIOINT->IO0IntStatR) >> 15)& 0x1) == ENABLE){
+		//DFR_ClearWheelCounts();
+		DFR_SetRightWheelDestination(10);
+		DFR_SetLeftWheelDestination(10);
+
 		WriteOLEDString((uint8_t*)"JOYSTICK: DOWN     ", 0, 0);
 		currentMovement = BACKWARDS;
 		WriteOLEDString((uint8_t*)"BACKWARDS      ", 3, 0);
@@ -336,6 +380,10 @@ void EINT3_IRQHandler (void)
 	}
 	// Joystick LEFT P2[4]
 	else if ((((LPC_GPIOINT->IO2IntStatR) >> 4)& 0x1) == ENABLE){
+		//DFR_ClearWheelCounts();
+		DFR_SetRightWheelDestination(10);
+		DFR_SetLeftWheelDestination(10);
+
 		WriteOLEDString((uint8_t*)"JOYSTICK: LEFT     ", 0, 0);
 		currentMovement = LEFT;
 		WriteOLEDString((uint8_t*)"LEFT      ", 3, 0);
@@ -344,6 +392,10 @@ void EINT3_IRQHandler (void)
 	}
 	// Joystick RIGHT P0[16]
 	else if ((((LPC_GPIOINT->IO0IntStatR) >> 16)& 0x1) == ENABLE){
+		//DFR_ClearWheelCounts();
+		DFR_SetRightWheelDestination(10);
+		DFR_SetLeftWheelDestination(10);
+
 		WriteOLEDString((uint8_t*)"JOYSTICK: RIGHT     ", 0, 0);
 		currentMovement = RIGHT;
 		WriteOLEDString((uint8_t*)"RIGHT       ", 3, 0);
@@ -361,19 +413,18 @@ void EINT3_IRQHandler (void)
 
 		DFR_DriveStop();
 	}
-	// Left Button
-	else if ((((LPC_GPIOINT->IO0IntStatR) >> 4)& 0x1) == ENABLE)
-	{
-
-	}
 
 	// Clear GPIO Interrupt Flags
 
 	// Port 0
-	// SW3 | Joystick DOWN | Joystick RIGHT | Joystick CENTER
+	// SW3 (Left button) | Joystick DOWN | Joystick RIGHT | Joystick CENTER
     GPIO_ClearInt(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17);
 
+	// Port 1
+	// Right Button
+    //GPIO_ClearInt(0, 1 << 31);
+
     // Port 2
-    // Joystick UP | Encoder | Encoder | Joystick LEFT
+    // Joystick UP | Encoder(Left) | Encoder(Right) | Joystick LEFT
     GPIO_ClearInt(2,1 << 3 | 1 << 11 | 1 << 12 | 1 << 4 );
 }
