@@ -217,10 +217,6 @@ void Init(void)
 	// SW3 | Joystick DOWN P0[15] | Joystick RIGHT P0[16] | Joystick CENTER P0[17]
 	GPIO_IntCmd(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17, 0);
 
-	// Port 1
-	// Right button P1[31]
-	//GPIO_IntCmd(1,1 << 31, 0);
-
 	// Port 2
 	// Joystick UP P2[3] | Joystick LEFT P2[4] | Encoder(Left) | Encoder(Right)
 	GPIO_IntCmd(2,1 << 3 | 1 << 4, 0 |  1 << 11 | 1 << 12);
@@ -271,7 +267,6 @@ int main (void)
 	//enum movement {LEFT, RIGHT, FORWARDS, BACKWARDS, IDLE};
 	//enum movement currentMovement;
 
-	//uint8_t a;
 	DFR_ClearWheelCounts();
 
 	// Main program loop
@@ -295,6 +290,13 @@ int main (void)
 		//WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 1, 0);
 		//WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 2, 0);
 
+		// Right Button
+		if (Buttons_Read2() == 0)
+		{
+			Tune_StopSong();
+			WriteOLEDString((uint8_t*)"Right button", 2, 0);
+		}
+
 	}
 }
 
@@ -312,13 +314,10 @@ void changeGear(uint8_t gear){
 /******************************************************************************
  * Interrupt Service Routines
  *****************************************************************************/
+uint8_t isPlayingSong = 0;
+uint8_t isPausedSong  = 0;
 void EINT3_IRQHandler (void)
 {
-
-	uint8_t a;
-	a = LPC_GPIOINT->IO0IntStatR;
-
-	uint8_t isPlaying = 0;
 
 	// Encoder input 1 (Left)
 	if ((((LPC_GPIOINT->IO2IntStatR) >> 11)& 0x1) == ENABLE)
@@ -338,19 +337,18 @@ void EINT3_IRQHandler (void)
 	{
 		if(Tune_IsPlaying()){
 			// Pause
+			//isPausedSong = 1;
 			Tune_PauseSong();
+			WriteOLEDString((uint8_t*)"Left button Paused", 1, 0);
 		}else{
 			// Play
 			Tune_PlaySong(Tune_SampleSongs[0]);
-		}
+			//isPlayingSong = 1;
 
-		WriteOLEDString((uint8_t*)"Left button", 1, 0);
+			WriteOLEDString((uint8_t*)"Left button Play", 1, 0);
+		}
 	}
-	// Right Button 2 (Stop) P1[31]
-	//else if ((((LPC_GPIOINT->IO1IntStatR) >> 31)& 0x1) == ENABLE)
-	//{
-	//	WriteOLEDString((uint8_t*)"Right button", 2, 0);
-	//}
+	// Right Button 2 (Stop) P1[31] is done through polling...
 
 
 	// Joystick UP P2[3]
@@ -419,10 +417,6 @@ void EINT3_IRQHandler (void)
 	// Port 0
 	// SW3 (Left button) | Joystick DOWN | Joystick RIGHT | Joystick CENTER
     GPIO_ClearInt(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17);
-
-	// Port 1
-	// Right Button
-    //GPIO_ClearInt(0, 1 << 31);
 
     // Port 2
     // Joystick UP | Encoder(Left) | Encoder(Right) | Joystick LEFT
