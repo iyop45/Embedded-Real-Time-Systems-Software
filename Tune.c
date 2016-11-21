@@ -128,19 +128,16 @@ static void PlayNote()
 
 			Time += CurrentNote;
 		}
-	} else {
+	} /*else {
 		DelayMS(CurrentDuration);
-	}
+	}*/
 }
 
-/*void Tune_PlaySong(char* SongString){
-	uint8_t size;
-	size = songStrong;
-}*/
 
 static void PlaySong(void)
 {
-	while (1)
+	//isPlaying = 1;
+	/*while (isPaused == 0 && isPlaying == 1)
 	{
 		if (*SongStringPointer == 0) { Tune_StopSong(); return; }
 		CurrentNote = GetNote(*SongStringPointer++);
@@ -157,9 +154,27 @@ static void PlaySong(void)
 		// Wait delay
 		DelayMS(CurrentPause);
 	}
+	isPlaying = 0;*/
 }
 
 //------------------------------------------------------------------------------
+
+#define SBIT_TIMER0  1
+#define SBIT_TIMER1  2
+
+#define SBIT_MR0I    0
+#define SBIT_MR0R    1
+
+#define SBIT_CNTEN   0
+
+#define PCLK_TIMER0  2
+
+#define MiliToMicroSec(x)  (x*1000)  /* ms is multiplied by 1000 to get us*/
+
+unsigned int getPrescalarForUs(uint8_t timerPclkBit);
+
+uint8_t isPlaying;
+uint8_t isPaused = 0;
 
 // Public Functions
 void Tune_Init(void)
@@ -175,34 +190,62 @@ void Tune_Init(void)
     GPIO_ClearValue(0, 1<<27); //LM4811-clk
     GPIO_ClearValue(0, 1<<28); //LM4811-up/dn
     GPIO_ClearValue(2, 1<<13); //LM4811-shutdn
+
+    // Timer interrupts
+    LPC_TIM0->MCR  = (1<<SBIT_MR0I) | (1<<SBIT_MR0R);     /* Clear TC on MR0 match and Generate Interrupt*/
+    LPC_TIM0->PR   = 100;      							  /* Prescalar for 1us */
+    LPC_TIM0->MR0  = MiliToMicroSec(5);                   /* Load timer value to generate 5ms delay*/
+    LPC_TIM0->TCR  = (1 <<SBIT_CNTEN);                    /* Start timer by setting the Counter Enable*/
+    NVIC_EnableIRQ(TIMER0_IRQn);                          /* Enable Timer0 Interrupt */
+
+    LPC_TIM1->MCR  = (1<<SBIT_MR0I) | (1<<SBIT_MR0R);     /* Clear TC on MR0 match and Generate Interrupt*/
+    LPC_TIM1->PR   = 200;      						      /* Prescalar for 1us */
+    LPC_TIM1->MR0  = MiliToMicroSec(5);                   /* Load timer value to generate 500us delay*/
+    LPC_TIM1->TCR  = (1 <<SBIT_CNTEN);                    /* Start timer by setting the Counter Enable*/
+    NVIC_EnableIRQ(TIMER1_IRQn);                          /* Enable Timer1 Interrupt */
 }
 
 uint8_t Tune_IsPlaying(void)
 {
-	//...
-	return 0;
+	if(isPlaying == 1){
+		return 1;
+	}else{
+		return 0;
+	}
 }
 
 void Tune_PlaySong(char* SongString)
 {
 	if (!SongString) return;
-	SongStringPointer = SongString;
-	PlaySong();
+
+	if(isPaused == 0){
+		SongStringPointer = SongString;
+	}
+
+	isPaused = 0;
+	isPlaying = 1;
+	//PlaySong();
 }
 
 uint8_t Tune_IsPaused(void)
 {
-	//...
-	return 0;
+	if(isPlaying == 0){
+		return 1;
+	}else{
+		return 0;
+	}
 }
 
 void Tune_PauseSong(void)
 {
-	//...
+	isPlaying = 0;
+	isPaused = 1;
 }
 
 void Tune_StopSong(void)
 {
+	isPlaying = 0;
+	isPaused = 0;
 	SongStringPointer = NULL;
 }
 
@@ -214,4 +257,114 @@ void Tune_SetTempo(int8_t Tempo)
 void Tune_SetPitch(int8_t Pitch)
 {
 	//...
+}
+
+
+
+
+// Added
+uint8_t timerCounter = 0;
+enum characterType {NOTE_AND_DURATION, PAUSE};
+enum characterType currentCharacterType = NOTE_AND_DURATION;
+uint8_t currentDuration = 0;
+uint8_t isPlayingNote = 0;
+
+void TIMER0_IRQHandler(void)
+{
+    unsigned int isrMask;
+
+    isrMask = LPC_TIM0->IR;
+    LPC_TIM0->IR = isrMask;         /* Clear the Interrupt Bit */
+
+    //WriteOLEDString((uint8_t*)"timer interrupt", 5, 0);
+
+    if(isPlaying == 1){
+    	// Passed previous duration
+    	if(timerCounter >= CurrentDuration){
+
+    		switch(currentCharacterType){
+    			case NOTE_AND_DURATION:
+    				// Current character is a note, so get the note and increment the song pointer
+    				if (*SongStringPointer == 0) { Tune_StopSong(); return; }
+    				CurrentNote = GetNote(*SongStringPointer++);
+
+    				if (*SongStringPointer == 0) { Tune_StopSong(); return; }
+    				CurrentDuration = GetDuration(*SongStringPointer++);
+
+    				//currentDuration = 0;
+    				currentCharacterType = PAUSE;
+
+    				// Play note
+    				//PlayNote();
+    				isPlayingNote = 1; // Start playing the note with the timer1 interrupt
+    				break;
+    			case PAUSE:
+    				if(isPlayingNote == 0){
+						if (*SongStringPointer == 0) { Tune_StopSong(); return; }
+
+						CurrentDuration = GetPause(*SongStringPointer++);
+						currentCharacterType = NOTE_AND_DURATION;
+						break;
+    				}
+    		}
+
+    		timerCounter = 0;
+
+    	}
+
+    	timerCounter += 5;
+    }
+}
+
+static void PlayNote()
+{
+	uint32_t Time = 0;
+	if (CurrentNote > 0) {
+		while (Time < (CurrentDuration * 1000)) {
+			SPEAKER_PIN_HIGH();
+			DelayUS(CurrentNote / 2);
+
+			SPEAKER_PIN_LOW();
+			DelayUS(CurrentNote / 2);
+
+			Time += CurrentNote;
+		}
+	} /*else {
+		DelayMS(CurrentDuration);
+	}*/
+}
+
+
+//uint8_t timer1Counter = 0;
+uint8_t isHigh = 1;
+uint8_t frequencyTimer = 0;
+uint8_t durationTimer = 0;
+void TIMER1_IRQHandler(void)
+{
+	if(isPlayingNote == 1){
+		if(durationTimer >= CurrentDuration * 1000){
+			// Finished playing note
+			isPlayingNote = 0;
+		}else{
+			if(timer1Counter <= (CurrentNote / 2)){
+				if(isHigh == 1){
+					isHigh = 0;
+					SPEAKER_PIN_HIGH();
+					//DelayUS(CurrentNote / 2);
+				}else{
+					isHigh = 1;
+					SPEAKER_PIN_LOW();
+					//DelayUS(CurrentNote / 2);
+
+					timer1Counter += CurrentNote;
+
+					durationTimer += Cur
+				}
+			}else{
+
+			}
+		}
+	}else{
+		timer1Counter = 0;
+	}
 }
