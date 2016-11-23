@@ -89,7 +89,7 @@ static uint32_t GetPause(uint8_t Character)
     case '.':
         return 20;
     case '_':
-        return 30;
+        return 50;
     default:
         return 5;
     }
@@ -176,6 +176,7 @@ unsigned int getPrescalarForUs(uint8_t timerPclkBit);
 uint8_t isPlaying;
 uint8_t isPaused = 0;
 uint8_t timer0InterruptLength = 5;
+uint8_t timer1InterruptLength = 5;
 
 // Public Functions
 void Tune_Init(void)
@@ -199,13 +200,13 @@ void Tune_Init(void)
     LPC_TIM0->PR   = 100;      							    /* Prescalar for 1us */
     LPC_TIM0->MR0  = MiliToMicroSec(timer0InterruptLength); /* Load timer value to generate 5ms delay*/
     LPC_TIM0->TCR  = (1 <<SBIT_CNTEN);                      /* Start timer by setting the Counter Enable*/
-    NVIC_EnableIRQ(TIMER0_IRQn);                            /* Enable Timer0 Interrupt */
+    //NVIC_EnableIRQ(TIMER0_IRQn);                          /* Enable Timer0 Interrupt */
 
     // Faster interrupt, to play the note
-    //LPC_TIM1->MCR  = (1<<SBIT_MR0I) | (1<<SBIT_MR0R);     /* Clear TC on MR0 match and Generate Interrupt*/
-    //LPC_TIM1->PR   = 200;      						    /* Prescalar for 1us */
-    //LPC_TIM1->MR0  = MiliToMicroSec(0.5);                 /* Load timer value to generate 500us delay*/
-    //LPC_TIM1->TCR  = (1 <<SBIT_CNTEN);                    /* Start timer by setting the Counter Enable*/
+    LPC_TIM1->MCR  = (1<<SBIT_MR0I) | (1<<SBIT_MR0R);     /* Clear TC on MR0 match and Generate Interrupt*/
+    LPC_TIM1->PR   = 200;      						      /* Prescalar for 1us */
+    LPC_TIM1->MR0  = MiliToMicroSec(timer1InterruptLength); /* Load timer value to generate 500us delay*/
+    LPC_TIM1->TCR  = (1 <<SBIT_CNTEN);                    /* Start timer by setting the Counter Enable*/
     //NVIC_EnableIRQ(TIMER1_IRQn);                          /* Enable Timer1 Interrupt */
 }
 
@@ -221,6 +222,7 @@ void Tune_PlaySong(char* SongString)
 	if(isPaused == 1){
 		isPaused = 0; // Maintained previous position in the song
 	}else{
+		NVIC_EnableIRQ(TIMER0_IRQn); //Enable Timer0 Interrupt
 		SongStringPointer = SongString; // Reset SongStringPointer
 	}
 
@@ -244,6 +246,7 @@ void Tune_StopSong(void)
 	isPlaying = 0;
 	isPaused = 0;
 
+	NVIC_DisableIRQ(TIMER0_IRQn); //Disable Timer0 Interrupt
 	SongStringPointer = NULL;
 }
 
@@ -259,13 +262,14 @@ void Tune_SetPitch(int8_t Pitch)
 
 
 // Added
-uint8_t timerCounter = 0;
-enum characterType {NOTE_AND_DURATION, PAUSE};
-enum characterType currentCharacterType = NOTE_AND_DURATION;
-uint8_t currentDuration = 0;
-uint8_t isPlayingNote = 0;
+//uint8_t timerCounter = 0;
+//enum characterType {NOTE_AND_DURATION, PAUSE};
+//enum characterType currentCharacterType = NOTE_AND_DURATION;
+//uint8_t currentDuration = 0;
+//uint8_t isPlayingNote = 0;
 
 uint8_t pauseTimer = 0; // Timer for between notes
+uint8_t isPlayingNote = 0;
 
 // Slower interrupt to push forward the note pointer and setPlayNote to true
 void TIMER0_IRQHandler(void)
@@ -279,6 +283,7 @@ void TIMER0_IRQHandler(void)
     if(isPlaying == 1){ // isPlaying gets set to 0 in Tune_StopSong();
 		if(pauseTimer >= CurrentPause){ // When the timer has exceeded CurrentPause enter this if statement
 			pauseTimer = 0; // Reset timer
+
 			if (*SongStringPointer == 0) { Tune_StopSong(); return; } // If last character in the SongStringPointer, exit the while loop
 			CurrentNote = GetNote(*SongStringPointer++);
 
@@ -288,8 +293,9 @@ void TIMER0_IRQHandler(void)
 			if (*SongStringPointer == 0) { Tune_StopSong(); return; }
 			CurrentPause = GetPause(*SongStringPointer++);
 
-			// Play note
-			PlayNote();
+			NVIC_EnableIRQ(TIMER1_IRQn); // Enable Timer1 Interrupt
+			NVIC_DisableIRQ(TIMER0_IRQn); // Disable (current) Timer0 Interrupt
+			isPlayingNote = 1;
 
 			// Wait delay
 			// DelayMS(CurrentPause); *Removed*
@@ -371,53 +377,47 @@ void TIMER0_IRQHandler(void)
 }*/
 
 
-uint8_t isHigh = 1;
-uint8_t frequencyTimer = 0;
-uint8_t durationTimer = 0;
-// Faster interrupt, to play the note
+//uint8_t isHigh = 1;
+//uint8_t frequencyTimer = 0;
+//uint8_t durationTimer = 0;
+
+enum pinState {HIGH, LOW};
+enum pinState currentPinState = HIGH;
+
+uint32_t noteTimer = 0;
+// Interrupt to play the note
 void TIMER1_IRQHandler(void)
 {
 	if(isPlayingNote == 1){
-		if(durationTimer >= CurrentDuration * 1000){
-			// Finished playing note
-			isPlayingNote = 0;
-		}else{
-			// Playing note
-			// Needs to set the pin high and low for as long as note is still playing
+		if (CurrentNote > 0) {
+			// Valid note, so play it
+			if(noteTimer < CurrentDuration * 1000){
+				SPEAKER_PIN_HIGH();
+				DelayUS(CurrentNote / 2);
 
+				SPEAKER_PIN_LOW();
+				DelayUS(CurrentNote / 2);
 
-
-
-
-
-			/*if(frequencyTimer <= (CurrentNote / 2)){
-				// Set high or low and then wait (CurrentNote / 2)us
-				if(isHigh == 1){
-					isHigh = 0;
-					SPEAKER_PIN_HIGH();
-
-					// Once set to high, the program needs to wait (CurrentNote / 2)us before setting the pin to low
-					//DelayUS(CurrentNote / 2);
-				}else{
-					isHigh = 1;
-					SPEAKER_PIN_LOW();
-					//DelayUS(CurrentNote / 2);
-
-					durationTimer += CurrentNote;
-
-					// Set High then low, so "CurrentNote" time has passed
-					frequencyTimer += CurrentNote;
-				}
+				noteTimer += CurrentNote;
 			}else{
-				frequencyTimer = 0;
-			}*/
+				// Finished playing note
+				noteTimer = 0;
 
-
-
-
+				NVIC_EnableIRQ(TIMER0_IRQn); // Enable Timer0 Interrupt
+				NVIC_DisableIRQ(TIMER1_IRQn); // Disable (current)Timer1 Interrupt
+				isPlayingNote = 0;
+			}
+		}else{
+			// Invalid Note, so wait CurrentDuration
+			if(noteTimer > CurrentDuration){
+				// Finished waiting
+				noteTimer = 0;
+				NVIC_EnableIRQ(TIMER0_IRQn); // Enable Timer0 Interrupt
+				NVIC_DisableIRQ(TIMER1_IRQn); // Disable (current)Timer1 Interrupt
+				isPlayingNote = 0;
+			}else{
+				noteTimer += timer1InterruptLength;
+			}
 		}
-	}else{
-		// Note has stopped playing, so reset the timer
-		durationTimer = 0;
 	}
 }
