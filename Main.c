@@ -322,29 +322,27 @@ void EINT3_IRQHandler (void)
 	// Encoder input 1 (Left)
 	if ((((LPC_GPIOINT->IO2IntStatR) >> 11)& 0x1) == ENABLE)
 	{
-		WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 1, 0);
+		WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 3, 0);
 		//DFR_ClearWheelCounts();
 	}
 	// Encoder input 2 (Right)
 	else if ((((LPC_GPIOINT->IO2IntStatR) >> 12)& 0x1) == ENABLE)
 	{
-		WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 2, 0);
+		WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 4, 0);
 		//DFR_ClearWheelCounts();
 	}
 
 	// Left Button 1 (Start / Pause) P0[4]
 	if ((((LPC_GPIOINT->IO0IntStatR) >> 4)& 0x1) == ENABLE)
 	{
+		// Toggle between pause and play
 		if(Tune_IsPlaying()){
 			// Pause
-			//isPausedSong = 1;
 			Tune_PauseSong();
 			WriteOLEDString((uint8_t*)"Left button Paused", 1, 0);
 		}else{
 			// Play
 			Tune_PlaySong(Tune_SampleSongs[0]);
-			//isPlayingSong = 1;
-
 			WriteOLEDString((uint8_t*)"Left button Play", 1, 0);
 		}
 	}
