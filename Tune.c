@@ -381,9 +381,6 @@ void TIMER0_IRQHandler(void)
 //uint8_t frequencyTimer = 0;
 //uint8_t durationTimer = 0;
 
-enum pinState {HIGH, LOW};
-enum pinState currentPinState = HIGH;
-
 uint32_t noteTimer = 0;
 // Interrupt to play the note
 void TIMER1_IRQHandler(void)
@@ -392,6 +389,8 @@ void TIMER1_IRQHandler(void)
 		if (CurrentNote > 0) {
 			// Valid note, so play it
 			if(noteTimer < CurrentDuration * 1000){
+				isTogglingSpeakerPins = 1;
+
 				SPEAKER_PIN_HIGH();
 				DelayUS(CurrentNote / 2);
 
@@ -418,6 +417,35 @@ void TIMER1_IRQHandler(void)
 			}else{
 				noteTimer += timer1InterruptLength;
 			}
+		}
+	}
+}
+
+enum pinState {HIGH, LOW};
+enum pinState currentPinState = HIGH;
+
+uint8_t isToggleDelay = 0;
+
+// NEEDS TO BE IMPLEMENTED
+// Interrupt to toggle speaker pin high and low
+void TIMER2_IRQHandler(void)
+{
+	if(isTogglingSpeakerPins == 1){
+		if(isToggleDelay == 0){
+			switch(currentPinState){
+				case HIGH:
+					SPEAKER_PIN_HIGH();
+					isToggleDelay = 1;
+					break;
+				case LOW:
+					SPEAKER_PIN_LOW();
+					isToggleDelay = 1;
+					break;
+			}
+		}else{
+			// Delay for (CurrentNote / 2) us
+			DelayUS(CurrentNote / 2);
+			isToggleDelay = 0;
 		}
 	}
 }
