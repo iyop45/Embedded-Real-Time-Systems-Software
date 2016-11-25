@@ -55,8 +55,8 @@ static uint32_t CurrentNote = 0;
 static uint32_t CurrentDuration = 0;
 static uint32_t CurrentPause = 0;
 
-static uint32_t CurrentTempo = 1; // {0.1, 10}
-static uint32_t CurrentPitch = 1; // {0.1, 10}
+static uint32_t CurrentTempo = 5; // {0.1, 10}
+static uint32_t CurrentPitch = 5; // {0.1, 10}
 
 //------------------------------------------------------------------------------
 
@@ -274,7 +274,7 @@ void Tune_SetPitch(int8_t Pitch)
 }
 
 void Tune_IncPitch(){
-	CurrentPitch += 1;
+	CurrentPitch += 0.2;
 }
 
 void Tune_DecPitch(){
@@ -299,6 +299,10 @@ uint32_t Tune_GetTempo(){
 	return CurrentTempo;
 }
 
+uint32_t Tune_GetPitch(){
+	return CurrentPitch;
+}
+
 uint8_t pauseTimer = 0; // Timer for between notes
 uint8_t isPlayingNote = 0;
 
@@ -317,6 +321,7 @@ void TIMER0_IRQHandler(void)
 
 			if (*SongStringPointer == 0) { Tune_StopSong(); return; } // If last character in the SongStringPointer, exit the while loop
 			CurrentNote = GetNote(*SongStringPointer++);
+			CurrentNote = CurrentNote / CurrentPitch;
 
 			if (*SongStringPointer == 0) { Tune_StopSong(); return; }
 			CurrentDuration = GetDuration(*SongStringPointer++);
