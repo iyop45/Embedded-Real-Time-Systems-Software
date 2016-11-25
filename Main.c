@@ -321,18 +321,37 @@ uint8_t isPausedSong  = 0;
 enum configState {GEAR, TEMPO, PITCH};
 enum configState currentConfigState = GEAR;
 
+uint8_t gearMutex = 0;
+uint8_t LeftWheelCount;
+uint8_t RightWheelCount;
+
 void EINT3_IRQHandler (void)
 {
 
 	// Encoder input 1 (Left)
 	if ((((LPC_GPIOINT->IO2IntStatR) >> 11)& 0x1) == ENABLE)
 	{
+		LeftWheelCount = DFR_GetLeftWheelCount();
+		DFR_IncLeftWheelCount();
 		//WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 3, 0);
 		//DFR_ClearWheelCounts();
 	}
 	// Encoder input 2 (Right)
 	else if ((((LPC_GPIOINT->IO2IntStatR) >> 12)& 0x1) == ENABLE)
 	{
+		switch(currentMovement){
+			case FORWARDS:
+				if(DFR_GetRightWheelCount() == DFR_GetRightWheelDestination()){
+					DFR_DriveStop();
+					currentMovement = IDLE;
+				}else{
+					RightWheelCount = DFR_GetRightWheelCount();
+					DFR_IncRightWheelCount();
+				}
+				break;
+		}
+		RightWheelCount = DFR_GetRightWheelCount();
+		DFR_IncRightWheelCount();
 		//WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 4, 0);
 		//DFR_ClearWheelCounts();
 	}
@@ -342,10 +361,14 @@ void EINT3_IRQHandler (void)
 	{
 		switch(currentConfigState){
 			case GEAR:
-				DFR_IncGear();
-				// Set the seven segment to the current 'gear'
-				Gear = DFR_GetGear();
-				SevenSegment_SetCharacter('0' + Gear, FALSE);
+				if(gearMutex == 0){
+					gearMutex = 1;
+					DFR_IncGear();
+					// Set the seven segment to the current 'gear'
+					Gear = DFR_GetGear();
+					SevenSegment_SetCharacter('0' + Gear, FALSE);
+					gearMutex = 0;
+				}
 				break;
 			case TEMPO:
 				Tune_IncTempo();
@@ -354,6 +377,8 @@ void EINT3_IRQHandler (void)
 				break;
 			case PITCH:
 				Tune_IncPitch();
+				WriteOLEDString((uint8_t*)"Pitch: ", 5, 0);
+				WriteOLEDString((uint32_t*)Tune_GetPitch(), 5, 6);
 				break;
 		}
 	}
@@ -361,10 +386,14 @@ void EINT3_IRQHandler (void)
 	else if((((LPC_GPIOINT->IO0IntStatR) >> 25)& 0x1) == ENABLE){
 		switch(currentConfigState){
 			case GEAR:
-				DFR_DecGear();
-				// Set the seven segment to the current 'gear'
-				Gear = DFR_GetGear();
-				SevenSegment_SetCharacter('0' + Gear, FALSE);
+				if(gearMutex == 0){
+					gearMutex = 1;
+					DFR_DecGear();
+					// Set the seven segment to the current 'gear'
+					Gear = DFR_GetGear();
+					SevenSegment_SetCharacter('0' + Gear, FALSE);
+					gearMutex = 0;
+				}
 				break;
 			case TEMPO:
 				Tune_DecTempo();
@@ -373,6 +402,8 @@ void EINT3_IRQHandler (void)
 				break;
 			case PITCH:
 				Tune_DecPitch();
+				WriteOLEDString((uint8_t*)"Pitch: ", 5, 0);
+				WriteOLEDString((uint32_t*)Tune_GetPitch(), 5, 6);
 				break;
 		}
 	}
