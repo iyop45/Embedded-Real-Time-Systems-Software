@@ -214,12 +214,12 @@ void Init(void)
 	// GPIO Interrupts Enable
 
 	// Port 0
-	// SW3 | Joystick DOWN P0[15] | Joystick RIGHT P0[16] | Joystick CENTER P0[17]
-	GPIO_IntCmd(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17, 0);
+	// SW3 | Joystick DOWN P0[15] | Joystick RIGHT P0[16] | Joystick CENTER P0[17] | Quadrature Rotary Switch P0[24] | Quadrature Rotary Switch P0[25]
+	GPIO_IntCmd(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17 | 1 << 24 | 1 << 25, 0);
 
 	// Port 2
 	// Joystick UP P2[3] | Joystick LEFT P2[4] | Encoder(Left) | Encoder(Right)
-	GPIO_IntCmd(2,1 << 3 | 1 << 4, 0 |  1 << 11 | 1 << 12);
+	GPIO_IntCmd(2,1 << 3 | 1 << 4 |  1 << 11 | 1 << 12, 0 );
 
 	// Enable GPIO Interrupts
 	NVIC_EnableIRQ(EINT3_IRQn);
@@ -264,6 +264,7 @@ int main (void)
 	DFR_IncGear();
 	DFR_IncGear();
 
+	WriteOLEDString((uint8_t*)"config: GEAR", 4, 0);
 	//enum movement {LEFT, RIGHT, FORWARDS, BACKWARDS, IDLE};
 	//enum movement currentMovement;
 
@@ -274,8 +275,8 @@ int main (void)
 	{
 
 		// Set the seven segment to the current 'gear'
-		Gear = DFR_GetGear();
-		SevenSegment_SetCharacter('0' + Gear, FALSE);
+		//Gear = DFR_GetGear();
+		//SevenSegment_SetCharacter('0' + Gear, FALSE);
 
 		/*if(Buttons_Read1() == 0){
 			WriteOLEDString((uint8_t*)"Button1 has been pressed", 1, 0);
@@ -316,20 +317,64 @@ void changeGear(uint8_t gear){
  *****************************************************************************/
 uint8_t isPlayingSong = 0;
 uint8_t isPausedSong  = 0;
+
+enum configState {GEAR, TEMPO, PITCH};
+enum configState currentConfigState = GEAR;
+
 void EINT3_IRQHandler (void)
 {
 
 	// Encoder input 1 (Left)
 	if ((((LPC_GPIOINT->IO2IntStatR) >> 11)& 0x1) == ENABLE)
 	{
-		WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 3, 0);
+		//WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 3, 0);
 		//DFR_ClearWheelCounts();
 	}
 	// Encoder input 2 (Right)
 	else if ((((LPC_GPIOINT->IO2IntStatR) >> 12)& 0x1) == ENABLE)
 	{
-		WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 4, 0);
+		//WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 4, 0);
 		//DFR_ClearWheelCounts();
+	}
+
+	// Quadrature Rotary Switch (Forward)
+	if ((((LPC_GPIOINT->IO0IntStatR) >> 24)& 0x1) == ENABLE)
+	{
+		switch(currentConfigState){
+			case GEAR:
+				DFR_IncGear();
+				// Set the seven segment to the current 'gear'
+				Gear = DFR_GetGear();
+				SevenSegment_SetCharacter('0' + Gear, FALSE);
+				break;
+			case TEMPO:
+				Tune_IncTempo();
+				WriteOLEDString((uint8_t*)"Tempo: ", 2, 0);
+				WriteOLEDString((uint32_t*)Tune_GetTempo(), 2, 6);
+				break;
+			case PITCH:
+				Tune_IncPitch();
+				break;
+		}
+	}
+	// Quadrature Rotary Switch (Backward)
+	else if((((LPC_GPIOINT->IO0IntStatR) >> 25)& 0x1) == ENABLE){
+		switch(currentConfigState){
+			case GEAR:
+				DFR_DecGear();
+				// Set the seven segment to the current 'gear'
+				Gear = DFR_GetGear();
+				SevenSegment_SetCharacter('0' + Gear, FALSE);
+				break;
+			case TEMPO:
+				Tune_DecTempo();
+				WriteOLEDString((uint8_t*)"Tempo: ", 2, 0);
+				WriteOLEDString((uint32_t*)Tune_GetTempo(), 2, 6);
+				break;
+			case PITCH:
+				Tune_DecPitch();
+				break;
+		}
 	}
 
 	// Left Button 1 (Start / Pause) P0[4]
@@ -339,11 +384,11 @@ void EINT3_IRQHandler (void)
 		if(Tune_IsPlaying()){
 			// Pause
 			Tune_PauseSong();
-			WriteOLEDString((uint8_t*)"Left button Paused", 1, 0);
+			WriteOLEDString((uint8_t*)"Paused", 1, 0);
 		}else{
 			// Play
 			Tune_PlaySong(Tune_SampleSongs[0]);
-			WriteOLEDString((uint8_t*)"Left button Play", 1, 0);
+			WriteOLEDString((uint8_t*)"Play", 1, 0);
 		}
 	}
 	// Right Button 2 (Stop) P1[31] is done through polling...
@@ -356,9 +401,8 @@ void EINT3_IRQHandler (void)
 		DFR_SetRightWheelDestination(10);
 		DFR_SetLeftWheelDestination(10);
 
-		WriteOLEDString((uint8_t*)"JOYSTICK: UP     ", 0, 0);
+		WriteOLEDString((uint8_t*)"FORWARDS", 0, 0);
 		currentMovement = FORWARDS;
-		WriteOLEDString((uint8_t*)"FORWARDS      ", 3, 0);
 
 		DFR_DriveForward(movementSpeed);
 	}
@@ -368,9 +412,8 @@ void EINT3_IRQHandler (void)
 		DFR_SetRightWheelDestination(10);
 		DFR_SetLeftWheelDestination(10);
 
-		WriteOLEDString((uint8_t*)"JOYSTICK: DOWN     ", 0, 0);
+		WriteOLEDString((uint8_t*)"BACKWARDS", 0, 0);
 		currentMovement = BACKWARDS;
-		WriteOLEDString((uint8_t*)"BACKWARDS      ", 3, 0);
 
 		DFR_DriveBackward(movementSpeed);
 	}
@@ -380,9 +423,8 @@ void EINT3_IRQHandler (void)
 		DFR_SetRightWheelDestination(10);
 		DFR_SetLeftWheelDestination(10);
 
-		WriteOLEDString((uint8_t*)"JOYSTICK: LEFT     ", 0, 0);
+		WriteOLEDString((uint8_t*)"LEFT", 0, 0);
 		currentMovement = LEFT;
-		WriteOLEDString((uint8_t*)"LEFT      ", 3, 0);
 
 		DFR_DriveLeft(movementSpeed);
 	}
@@ -392,14 +434,28 @@ void EINT3_IRQHandler (void)
 		DFR_SetRightWheelDestination(10);
 		DFR_SetLeftWheelDestination(10);
 
-		WriteOLEDString((uint8_t*)"JOYSTICK: RIGHT     ", 0, 0);
+		WriteOLEDString((uint8_t*)"RIGHT", 0, 0);
 		currentMovement = RIGHT;
-		WriteOLEDString((uint8_t*)"RIGHT       ", 3, 0);
 
 		DFR_DriveRight(movementSpeed);
 	}
 	// Joystick CENTER P0[17]
 	else if ((((LPC_GPIOINT->IO0IntStatR) >> 17)& 0x1) == ENABLE){
+		switch(currentConfigState){
+			case GEAR:
+				currentConfigState = TEMPO;
+				WriteOLEDString((uint8_t*)"config: TEMPO", 4, 0);
+				break;
+			case TEMPO:
+				currentConfigState = PITCH;
+				WriteOLEDString((uint8_t*)"config: PITCH", 4, 0);
+				break;
+			case PITCH:
+				currentConfigState = GEAR;
+				WriteOLEDString((uint8_t*)"config: GEAR ", 4, 0);
+				break;
+		}
+
 		WriteOLEDString((uint8_t*)"JOYSTICK: CENTER     ", 0, 0);
 		currentMovement = IDLE;
 		WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
@@ -413,8 +469,8 @@ void EINT3_IRQHandler (void)
 	// Clear GPIO Interrupt Flags
 
 	// Port 0
-	// SW3 (Left button) | Joystick DOWN | Joystick RIGHT | Joystick CENTER
-    GPIO_ClearInt(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17);
+	// SW3 (Left button) | Joystick DOWN | Joystick RIGHT | Joystick CENTER | Quadrature Rotary Switch P0[24] | Quadrature Rotary Switch P0[25]
+    GPIO_ClearInt(0,1 << 4 | 1 << 15 | 1 << 16 | 1 << 17 | 1 << 24 | 1 << 25);
 
     // Port 2
     // Joystick UP | Encoder(Left) | Encoder(Right) | Joystick LEFT
