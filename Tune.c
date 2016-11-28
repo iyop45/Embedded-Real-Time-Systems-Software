@@ -14,6 +14,8 @@
 
 // Includes
 #include "LPC17xx_GPIO.h"
+#include "LPC17xx_ADC.h"
+#include "Buttons.h"
 
 #include "Tune.h"
 
@@ -98,27 +100,7 @@ static uint32_t GetPause(uint8_t Character)
     }
 }
 
-static void DelayUS(int Length)
-{
-   volatile int Delay;
-   volatile int D;
-   for (Delay=0; Delay<Length*3; Delay++)
-   {
-	   D = Delay;
-   }
-}
-
-static void DelayMS(int Length)
-{
-   volatile int Delay;
-   volatile int D;
-   for (Delay=0; Delay<Length*3000; Delay++)
-   {
-	   D = Delay;
-   }
-}
-
-static void PlayNote()
+/*static void PlayNote()
 {
 	uint32_t Time = 0;
 	if (CurrentNote > 0) {
@@ -134,7 +116,7 @@ static void PlayNote()
 	} else {
 		DelayMS(CurrentDuration);
 	}
-}
+}*/
 
 
 //static void PlaySong(void) // *Removed*
@@ -274,7 +256,7 @@ void Tune_SetPitch(int8_t Pitch)
 }
 
 void Tune_IncPitch(){
-	CurrentPitch += 0.2;
+	CurrentPitch += 1;
 }
 
 void Tune_DecPitch(){
@@ -346,6 +328,10 @@ void TIMER0_IRQHandler(void)
 uint32_t noteTimer = 0;
 uint32_t freqTimer = 0;
 uint8_t isTogglingSpeakerPins = 0;
+uint32_t trim = 0;
+
+uint32_t timerOutCounter = 0;
+uint8_t flag = 0;
 
 enum pinState {HIGH, LOW};
 enum pinState currentPinState = HIGH;
@@ -393,6 +379,32 @@ void TIMER1_IRQHandler(void)
 				// Finished playing note
 				noteTimer = 0;
 				freqTimer = 0;
+
+				// Poll the ADC to change the pitch
+		        /* ############ Trimpot and RGB LED  ########### */
+				ADC_StartCmd(LPC_ADC,ADC_START_NOW);
+				// Wait conversion complete
+				timerOutCounter = 0;
+				flag = 0;
+				while (!(ADC_ChannelGetStatus(LPC_ADC,ADC_CHANNEL_0,ADC_DATA_DONE))){
+					if(timerOutCounter > 10000000){
+						flag = 1;
+						break;
+					}
+
+					timerOutCounter++;
+				}
+
+				if(flag == 0){
+					trim = ADC_ChannelGetData(LPC_ADC,ADC_CHANNEL_0); //uint16_t
+					CurrentPitch = (uint8_t)((float)trim/(float)819.0)+2;
+				}
+
+				if (Buttons_Read2() == 0)
+				{
+					Tune_StopSong();
+					WriteOLEDString((uint8_t*)"Right button", 2, 0);
+				}
 
 				NVIC_EnableIRQ(TIMER0_IRQn); // Enable Timer0 Interrupt
 				NVIC_DisableIRQ(TIMER1_IRQn); // Disable (current)Timer1 Interrupt
