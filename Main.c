@@ -168,7 +168,7 @@ static void Init_I2C(void)
  *****************************************************************************/
 static void Init_ADC(void)
 {
-	/*
+
 	PINSEL_CFG_Type PinConfig;
 	PinConfig.Funcnum = 1;
 	PinConfig.OpenDrain = 0;
@@ -183,7 +183,30 @@ static void Init_ADC(void)
 	ADC_IntConfig(LPC_ADC,ADC_ADINTEN0,SET);
 	ADC_BurstCmd(LPC_ADC,1);
 	ADC_StartCmd(LPC_ADC,ADC_START_CONTINUOUS);
-	*/
+
+
+	/*
+	PINSEL_CFG_Type PinCfg; //code from example
+
+
+	 * Init ADC pin connect
+	 * AD0.0 on P0.23
+
+	PinCfg.Funcnum = 1;
+	PinCfg.OpenDrain = 0;
+	PinCfg.Pinmode = 0;
+	PinCfg.Pinnum = 23;
+	PinCfg.Portnum = 0;
+	PINSEL_ConfigPin(&PinCfg);
+
+	/* Configuration for ADC :
+	 * 	Frequency at 0.2Mhz
+	 *  ADC channel 0, no Interrupt
+
+	ADC_Init(LPC_ADC, 200000);
+	ADC_IntConfig(LPC_ADC,ADC_CHANNEL_0,DISABLE);
+	ADC_ChannelCmd(LPC_ADC,ADC_CHANNEL_0,ENABLE);
+*/
 }
 
 /******************************************************************************
@@ -197,7 +220,7 @@ void Init(void)
 	Init_SysTick100ms();
 	Init_SSP();
 	Init_I2C();
-	//Init_ADC();
+	Init_ADC();
 	LED2_On();
 
 	// Baseboard
@@ -270,6 +293,13 @@ int main (void)
 
 	DFR_ClearWheelCounts();
 
+	//pca9532_setLeds(0xFF00,0x0000); // only green LEDs // forward
+	//pca9532_setLeds(0x00FF,0x0000); // only red LEDs // backward
+	//pca9532_setLeds(0x0F0F,0x0000); //  green LEDs top, red LEDs bottom // right
+	//pca9532_setLeds(0xF0F0,0x0000); //  green LEDs bottom, red LEDs top // left
+
+
+
 	// Main program loop
 	while (1)
 	{
@@ -292,11 +322,11 @@ int main (void)
 		//WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 2, 0);
 
 		// Right Button
-		if (Buttons_Read2() == 0)
+		/*if (Buttons_Read2() == 0)
 		{
 			Tune_StopSong();
 			WriteOLEDString((uint8_t*)"Right button", 2, 0);
-		}
+		}*/
 
 	}
 }
@@ -325,35 +355,147 @@ uint8_t gearMutex = 0;
 uint8_t LeftWheelCount;
 uint8_t RightWheelCount;
 
+uint8_t LeftDestination;
+uint8_t RightDestination;
+
 void EINT3_IRQHandler (void)
 {
 
 	// Encoder input 1 (Left)
 	if ((((LPC_GPIOINT->IO2IntStatR) >> 11)& 0x1) == ENABLE)
 	{
+		LeftDestination = DFR_GetLeftWheelDestination();
+		switch(currentMovement){
+			case FORWARDS:
+				// Check if its finished moving forwards
+				if(DFR_GetLeftWheelCount() > LeftDestination){
+					// Reached destination
+					DFR_DriveStop();
+					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish forwards (Left)", 6, 0);
+				}else{
+					// Not there yet, so increment movement count
+					DFR_IncLeftWheelCount();
+				}
+				break;
+			case BACKWARDS:
+				if(DFR_GetLeftWheelCount() > LeftDestination){//<
+					DFR_DriveStop();
+					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish backwards (Left)", 6, 0);
+				}else{
+					DFR_IncLeftWheelCount();//dec
+				}
+				break;
+			case LEFT:
+				if(DFR_GetLeftWheelCount() > LeftDestination){//<
+					DFR_DriveStop();
+					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish left (Left)", 6, 0);
+				}else{
+					DFR_IncLeftWheelCount();//dec
+				}
+				break;
+			case RIGHT:
+				if(DFR_GetLeftWheelCount() > LeftDestination){
+					DFR_DriveStop();
+					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish right (Left)", 6, 0);
+				}else{
+					DFR_IncLeftWheelCount();
+				}
+				break;
+		}
+
 		LeftWheelCount = DFR_GetLeftWheelCount();
-		DFR_IncLeftWheelCount();
-		//WriteOLEDString((uint8_t*)DFR_GetLeftWheelCount(), 3, 0);
-		//DFR_ClearWheelCounts();
 	}
 	// Encoder input 2 (Right)
 	else if ((((LPC_GPIOINT->IO2IntStatR) >> 12)& 0x1) == ENABLE)
 	{
+		RightDestination = DFR_GetRightWheelDestination();
 		switch(currentMovement){
 			case FORWARDS:
-				if(DFR_GetRightWheelCount() == DFR_GetRightWheelDestination()){
+				// Check if its finished moving forwards
+				if(DFR_GetRightWheelCount() > RightDestination){
+					// Reached destination
 					DFR_DriveStop();
 					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish forwards (Right)", 6, 0);
 				}else{
-					RightWheelCount = DFR_GetRightWheelCount();
+					// Not there yet, so increment movement count
 					DFR_IncRightWheelCount();
 				}
 				break;
+			case BACKWARDS:
+				if(DFR_GetRightWheelCount() > RightDestination){//<
+					DFR_DriveStop();
+					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish backwards (Right)", 6, 0);
+				}else{
+					DFR_IncRightWheelCount();//dec
+				}
+				break;
+			case LEFT:
+				if(DFR_GetRightWheelCount() > RightDestination){//>
+					DFR_DriveStop();
+					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish left (Right)", 6, 0);
+				}else{
+					DFR_IncRightWheelCount();
+				}
+				break;
+			case RIGHT:
+				if(DFR_GetRightWheelCount() > RightDestination){//<
+					DFR_DriveStop();
+					currentMovement = IDLE;
+					DFR_SetLeftWheelCount(0);
+					DFR_SetRightWheelCount(0);
+
+					pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+					WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
+					WriteOLEDString((uint8_t*)"Finish right (Right)", 6, 0);
+				}else{
+					DFR_IncRightWheelCount();//dec
+				}
+				break;
 		}
+
 		RightWheelCount = DFR_GetRightWheelCount();
-		DFR_IncRightWheelCount();
-		//WriteOLEDString((uint8_t*)DFR_GetRightWheelCount(), 4, 0);
-		//DFR_ClearWheelCounts();
 	}
 
 	// Quadrature Rotary Switch (Forward)
@@ -432,6 +574,13 @@ void EINT3_IRQHandler (void)
 		DFR_SetRightWheelDestination(10);
 		DFR_SetLeftWheelDestination(10);
 
+		// Reset wheel counters
+		DFR_SetLeftWheelCount(0);
+		DFR_SetRightWheelCount(0);
+
+		pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+		pca9532_setLeds(0xFF00,0x0000); // only green LEDs
+
 		WriteOLEDString((uint8_t*)"FORWARDS", 0, 0);
 		currentMovement = FORWARDS;
 
@@ -440,8 +589,15 @@ void EINT3_IRQHandler (void)
 	// Joystick DOWN P0[15]
 	else if ((((LPC_GPIOINT->IO0IntStatR) >> 15)& 0x1) == ENABLE){
 		//DFR_ClearWheelCounts();
-		DFR_SetRightWheelDestination(10);
-		DFR_SetLeftWheelDestination(10);
+		DFR_SetRightWheelDestination(10);//-
+		DFR_SetLeftWheelDestination(10);//-
+
+		// Reset wheel counters
+		DFR_SetLeftWheelCount(0);
+		DFR_SetRightWheelCount(0);
+
+		pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+		pca9532_setLeds(0x00FF,0x0000); // only red LEDs
 
 		WriteOLEDString((uint8_t*)"BACKWARDS", 0, 0);
 		currentMovement = BACKWARDS;
@@ -451,8 +607,15 @@ void EINT3_IRQHandler (void)
 	// Joystick LEFT P2[4]
 	else if ((((LPC_GPIOINT->IO2IntStatR) >> 4)& 0x1) == ENABLE){
 		//DFR_ClearWheelCounts();
-		DFR_SetRightWheelDestination(10);
-		DFR_SetLeftWheelDestination(10);
+		DFR_SetRightWheelDestination(5);
+		DFR_SetLeftWheelDestination(5);//-
+
+		// Reset wheel counters
+		DFR_SetLeftWheelCount(0);
+		DFR_SetRightWheelCount(0);
+
+		pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+		pca9532_setLeds(0xF0F0,0x0000); //  green LEDs bottom, red LEDs top
 
 		WriteOLEDString((uint8_t*)"LEFT", 0, 0);
 		currentMovement = LEFT;
@@ -462,8 +625,15 @@ void EINT3_IRQHandler (void)
 	// Joystick RIGHT P0[16]
 	else if ((((LPC_GPIOINT->IO0IntStatR) >> 16)& 0x1) == ENABLE){
 		//DFR_ClearWheelCounts();
-		DFR_SetRightWheelDestination(10);
-		DFR_SetLeftWheelDestination(10);
+		DFR_SetRightWheelDestination(5);//-
+		DFR_SetLeftWheelDestination(5);
+
+		// Reset wheel counters
+		DFR_SetLeftWheelCount(0);
+		DFR_SetRightWheelCount(0);
+
+		pca9532_setLeds(0x0000,0xFFFF); // reset LEDs
+		pca9532_setLeds(0x0F0F,0x0000); //  green LEDs top, red LEDs bottom
 
 		WriteOLEDString((uint8_t*)"RIGHT", 0, 0);
 		currentMovement = RIGHT;
@@ -490,9 +660,6 @@ void EINT3_IRQHandler (void)
 		WriteOLEDString((uint8_t*)"JOYSTICK: CENTER     ", 0, 0);
 		currentMovement = IDLE;
 		WriteOLEDString((uint8_t*)"IDLE      ", 3, 0);
-
-		DFR_SetRightWheelCount(0);
-		DFR_SetLeftWheelCount(0);
 
 		DFR_DriveStop();
 	}
