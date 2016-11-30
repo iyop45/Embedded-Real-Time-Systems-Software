@@ -18,7 +18,7 @@
 #include "Buttons.h"
 
 #include "Tune.h"
-
+#include "OLED.h"
 //------------------------------------------------------------------------------
 
 // Defines and typedefs
@@ -161,7 +161,7 @@ unsigned int getPrescalarForUs(uint8_t timerPclkBit);
 uint8_t isPlaying;
 uint8_t isPaused = 0;
 uint32_t timer0InterruptLength = 5000;
-uint32_t timer1InterruptLength = 10;
+uint32_t timer1InterruptLength = 5;
 uint32_t timer2InterruptLength = 5000;
 
 // Public Functions
@@ -233,16 +233,6 @@ void Tune_PauseSong(void)
 	isPlaying = 0; // Stop song immediately
 }
 
-void Tune_StopSong(void)
-{
-	isPlaying = 0;
-	isPaused = 0;
-
-	NVIC_DisableIRQ(TIMER0_IRQn); //Disable Timer0 Interrupt
-	NVIC_DisableIRQ(TIMER1_IRQn); //Disable Timer0 Interrupt
-	SongStringPointer = NULL;
-}
-
 // Change the speed at which the song plays
 void Tune_SetTempo(int8_t Tempo)
 {
@@ -283,6 +273,26 @@ uint32_t Tune_GetTempo(){
 
 uint32_t Tune_GetPitch(){
 	return CurrentPitch;
+}
+
+
+void Tune_StopSong(void)
+{
+	isPlaying = 0;
+	isPaused = 0;
+
+	CurrentTempo = 5;
+	CurrentPitch = 5;
+
+	WriteOLEDString((uint8_t*)"Stopped song", 2, 1);
+	WriteOLEDString((uint8_t*)"Tempo: ", 3, 1);
+
+	WriteOLEDString((uint8_t*)"Pitch: ", 4, 1);
+	WriteOLEDString((uint8_t*)Tune_GetPitch(), 4, 13);
+
+	NVIC_DisableIRQ(TIMER0_IRQn); //Disable Timer0 Interrupt
+	NVIC_DisableIRQ(TIMER1_IRQn); //Disable Timer0 Interrupt
+	SongStringPointer = NULL;
 }
 
 uint8_t pauseTimer = 0; // Timer for between notes
@@ -369,25 +379,18 @@ void TIMER1_IRQHandler(void)
 				freqTimer += timer1InterruptLength;
 				noteTimer += timer1InterruptLength;
 
-				//SPEAKER_PIN_HIGH();
-				//DelayUS(CurrentNote / 2);
-
-				//SPEAKER_PIN_LOW();
-				//DelayUS(CurrentNote / 2);
-
 			}else{
 				// Finished playing note
 				noteTimer = 0;
 				freqTimer = 0;
 
 				// Poll the ADC to change the pitch
-		        /* ############ Trimpot and RGB LED  ########### */
 				ADC_StartCmd(LPC_ADC,ADC_START_NOW);
 				// Wait conversion complete
 				timerOutCounter = 0;
 				flag = 0;
 				while (!(ADC_ChannelGetStatus(LPC_ADC,ADC_CHANNEL_0,ADC_DATA_DONE))){
-					if(timerOutCounter > 10000000){
+					if(timerOutCounter > 100){
 						flag = 1;
 						break;
 					}
@@ -403,7 +406,6 @@ void TIMER1_IRQHandler(void)
 				if (Buttons_Read2() == 0)
 				{
 					Tune_StopSong();
-					WriteOLEDString((uint8_t*)"Right button", 2, 0);
 				}
 
 				NVIC_EnableIRQ(TIMER0_IRQn); // Enable Timer0 Interrupt
