@@ -285,10 +285,12 @@ void Tune_StopSong(void)
 	CurrentPitch = 5;
 
 	WriteOLEDString((uint8_t*)"Stopped song", 2, 1);
+
 	WriteOLEDString((uint8_t*)"Tempo: ", 3, 1);
+	WriteOLEDString((uint8_t*)Tune_GetTempo(), 4, 7);
 
 	WriteOLEDString((uint8_t*)"Pitch: ", 4, 1);
-	WriteOLEDString((uint8_t*)Tune_GetPitch(), 4, 13);
+	WriteOLEDString((uint8_t*)Tune_GetPitch(), 4, 7);
 
 	NVIC_DisableIRQ(TIMER0_IRQn); //Disable Timer0 Interrupt
 	NVIC_DisableIRQ(TIMER1_IRQn); //Disable Timer0 Interrupt
