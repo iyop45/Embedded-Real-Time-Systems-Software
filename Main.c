@@ -296,11 +296,14 @@ int main (void)
 
 	DFR_ClearWheelCounts();
 
+	//CPU_Counter = 1000000; // Joshua added for CPU usage stat
 	// Main program loop
 	while (1)
 	{
 		// Should be empty
+		//CPU_Counter--; // CPU counter decrements whilst in main program loop.
 	}
+	
 }
 
 void changeGear(uint8_t gear){
@@ -611,5 +614,6 @@ void EINT3_IRQHandler (void)
 
     // Port 2
     // Joystick UP | Encoder(Left) | Encoder(Right) | Joystick LEFT
-    GPIO_ClearInt(2,1 << 3 | 1 << 11 | 1 << 12 | 1 << 4 );
+    GPIO_ClearInt(2,1 << 3 | 1 << 11 | 1 << 12 | 1 << 4 );	
+	
 }
