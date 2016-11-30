@@ -288,7 +288,6 @@ int main (void)
 
 	movementSpeed = 100;
 
-	//changeGear(2);
 	DFR_IncGear();
 	DFR_IncGear();
 
@@ -477,11 +476,15 @@ void EINT3_IRQHandler (void)
 	// Quadrature Rotary Switch (Forward)
 	if ((((LPC_GPIOINT->IO0IntStatR) >> 24)& 0x1) == ENABLE)
 	{
-
+		Tune_IncTempo();
+		WriteOLEDString((uint8_t*)"Tempo: ", 3, 1);
+		WriteOLEDString((uint32_t*)Tune_GetTempo(), 3, 7);
 	}
 	// Quadrature Rotary Switch (Backward)
 	else if((((LPC_GPIOINT->IO0IntStatR) >> 25)& 0x1) == ENABLE){
-
+		Tune_DecTempo();
+		WriteOLEDString((uint8_t*)"Tempo: ", 3, 1);
+		WriteOLEDString((uint32_t*)Tune_GetTempo(), 3, 7);
 	}
 
 	// Left Button 1 (Start / Pause) P0[4]
